@@ -208,9 +208,9 @@ export const Projects: React.FC = () => {
             ...prev,
             {
                 skillName: '',
-                minimumExperience: 1,
+                minimumExperience: 0,
                 priority: 'Must-have',
-                weight: 50,
+                weight: 0,
             },
         ]);
     };

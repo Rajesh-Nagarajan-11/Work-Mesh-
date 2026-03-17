@@ -16,7 +16,7 @@ export const Navbar: React.FC = () => {
         { label: 'Dashboard', path: '/dashboard' },
         { label: 'Employees', path: '/employees' },
         { label: 'Projects', path: '/projects' },
-        { label: 'Demand Hirings', path: '/demand-hirings' },
+        { label: 'Skill Gaps & Hiring', path: '/demand-hirings' },
     ];
 
     const handleLogout = async () => {
@@ -109,14 +109,7 @@ export const Navbar: React.FC = () => {
                                                     <User className="w-4 h-4" />
                                                     Profile
                                                 </Link>
-                                                <Link
-                                                    to="/settings"
-                                                    className="flex items-center gap-2 px-4 py-2 text-sm text-secondary-700 dark:text-secondary-200 hover:bg-secondary-50 dark:hover:bg-slate-700 transition-colors"
-                                                    onClick={() => setIsUserMenuOpen(false)}
-                                                >
-                                                    <Settings className="w-4 h-4" />
-                                                    Settings
-                                                </Link>
+                                                {/* Settings option removed */}
                                                 <hr className="my-1 border-border" />
                                                 <button
                                                     onClick={() => {

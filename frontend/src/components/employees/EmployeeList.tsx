@@ -75,6 +75,20 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
                                 )}
                             </div>
 
+                            {/* Current project */}
+                            <div className="text-sm text-secondary-600 dark:text-secondary-400">
+                                {employee.availability?.currentProject ? (
+                                    <span>
+                                        Current project:{' '}
+                                        <span className="font-medium">
+                                            {employee.availability.currentProject}
+                                        </span>
+                                    </span>
+                                ) : (
+                                    <span>Current project: <span className="font-medium">Not allocated</span></span>
+                                )}
+                            </div>
+
                             {/* Experience and Score */}
                             <div className="flex flex-wrap gap-3 text-sm">
                                 <span className="px-3 py-1 rounded-full bg-primary-100 text-primary-800 dark:bg-primary-900/20 dark:text-primary-400 font-medium">

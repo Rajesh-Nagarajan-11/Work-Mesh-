@@ -59,7 +59,36 @@ async function recommendTeam(req, res) {
             return fail(res, 502, `ML service error (${status})`);
         }
 
-        return ok(res, body, 'Team recommendation ready');
+        const sanitizeCandidate = (candidate) => {
+            if (!candidate || typeof candidate !== 'object') return candidate;
+            const { final_score, match_percentage, score_breakdown, ...rest } = candidate;
+            return rest;
+        };
+
+        const recommendedTeam = Array.isArray(body.recommended_team)
+            ? body.recommended_team.map(sanitizeCandidate)
+            : [];
+
+        const allCandidates = Array.isArray(body.all_candidates)
+            ? body.all_candidates.map(sanitizeCandidate)
+            : [];
+
+        const totalSkillsRequired = Number(body.total_skills_required || 0);
+        const totalSkillsCovered = Number(body.total_skills_covered || 0);
+        const coverageScore = totalSkillsRequired > 0
+            ? (totalSkillsCovered / totalSkillsRequired) * 100
+            : 100;
+        const seniorityBalance = Number(recommendedTeam[0]?.team_seniority_balance || 0);
+        const fallbackTeamSuitability = Math.round(((coverageScore * 0.85) + (seniorityBalance * 0.15)) * 10) / 10;
+
+        const normalizedBody = {
+            ...body,
+            recommended_team: recommendedTeam,
+            all_candidates: allCandidates,
+            team_suitability_score: Number(body.team_suitability_score ?? fallbackTeamSuitability),
+        };
+
+        return ok(res, normalizedBody, 'Team recommendation ready');
     } catch (err) {
         console.error('[teamFormationController] ML service unreachable:', err.message);
         return fail(

@@ -1,33 +1,34 @@
-const express = require('express');
-const { authenticate, requireRole } = require('../middleware/auth');
+const express = require("express");
+const { authenticate, requireRole } = require("../middleware/auth");
 const {
-    getAll,
-    getByEmployee,
-    getByProject,
-    create,
-    update,
-    remove,
-} = require('../controllers/historyController');
+  getAll,
+  getByEmployee,
+  getByProject,
+  create,
+  update,
+  remove,
+} = require("../controllers/historyController");
+const asyncHandler = require("../utils/asyncHandler");
 
 const router = express.Router();
 router.use(authenticate);
 
-// GET /api/history
-router.get('/', getAll);
+// GET /api/history - Get all history records in the org
+router.get("/", asyncHandler(getAll));
 
-// GET /api/history/employee/:empId
-router.get('/employee/:empId', getByEmployee);
+// GET /api/history/employee/:empId - Get history for a specific employee
+router.get("/employee/:empId", asyncHandler(getByEmployee));
 
-// GET /api/history/project/:projectId
-router.get('/project/:projectId', getByProject);
+// GET /api/history/project/:projectId - Get history for a specific project
+router.get("/project/:projectId", asyncHandler(getByProject));
 
-// POST /api/history
-router.post('/', requireRole('Admin', 'Manager'), create);
+// POST /api/history - Create a new history record (Admin/Manager only)
+router.post("/", requireRole("Admin", "Manager"), asyncHandler(create));
 
-// PUT /api/history/:id - Update feedback, role etc.
-router.put('/:id', requireRole('Admin', 'Manager'), update);
+// PUT /api/history/:id - Update a history record
+router.put("/:id", asyncHandler(update));
 
-// DELETE /api/history/:id
-router.delete('/:id', requireRole('Admin'), remove);
+// DELETE /api/history/:id - Delete a history record (Admin/Manager only)
+router.delete("/:id", requireRole("Admin", "Manager"), asyncHandler(remove));
 
 module.exports = router;

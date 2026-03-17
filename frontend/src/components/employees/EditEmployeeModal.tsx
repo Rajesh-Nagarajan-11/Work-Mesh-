@@ -44,14 +44,20 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
         phone: '',
         department: '',
         role: '',
-        experience: 0,
-        pastProjectScore: 0,
+        location: '',
+        totalExperienceYears: '',
+        communicationScore: '',
+        teamworkScore: '',
+        performanceRating: '',
+        errorRate: '',
+        pastProjectScore: '',
     });
 
     const [availability, setAvailability] = useState<{
         currentProject?: string;
         currentWorkload: number;
-    }>({ currentProject: undefined, currentWorkload: 0 });
+        availableFrom?: string;
+    }>({ currentProject: undefined, currentWorkload: 0, availableFrom: undefined });
 
     const [skills, setSkills] = useState<SkillInput[]>([]);
 
@@ -64,12 +70,26 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
             phone: employee.phone || '',
             department: employee.department || '',
             role: employee.role || '',
-            experience: employee.experience || 0,
-            pastProjectScore: employee.pastProjectScore || 0,
+            location: employee.location || '',
+            totalExperienceYears:
+                employee.total_experience_years !== undefined
+                    ? String(employee.total_experience_years)
+                    : employee.experience !== undefined
+                    ? String(employee.experience)
+                    : '',
+            communicationScore:
+                employee.communication_score !== undefined ? String(employee.communication_score) : '',
+            teamworkScore: employee.teamwork_score !== undefined ? String(employee.teamwork_score) : '',
+            performanceRating:
+                employee.performance_rating !== undefined ? String(employee.performance_rating) : '',
+            errorRate: employee.error_rate !== undefined ? String(employee.error_rate) : '',
+            pastProjectScore:
+                employee.pastProjectScore !== undefined ? String(employee.pastProjectScore) : '',
         });
         setAvailability({
             currentProject: employee.availability?.currentProject,
             currentWorkload: employee.availability?.currentWorkload || 0,
+            availableFrom: employee.availability?.availableFrom,
         });
         setSkills(
             (employee.skills || []).map((s) => ({
@@ -123,8 +143,30 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) next.email = 'Invalid email format';
         if (!formData.department.trim()) next.department = 'Department is required';
         if (!formData.role.trim()) next.role = 'Role is required';
-        if (formData.experience < 0) next.experience = 'Experience must be 0 or greater';
-        if (formData.pastProjectScore < 0 || formData.pastProjectScore > 100) next.pastProjectScore = 'Score must be 0–100';
+        if (formData.totalExperienceYears !== '' && Number(formData.totalExperienceYears) < 0)
+            next.totalExperienceYears = 'Experience must be 0 or greater';
+        if (
+            formData.communicationScore !== '' &&
+            (Number(formData.communicationScore) < 0 || Number(formData.communicationScore) > 10)
+        )
+            next.communicationScore = 'Communication score must be 0-10';
+        if (
+            formData.teamworkScore !== '' &&
+            (Number(formData.teamworkScore) < 0 || Number(formData.teamworkScore) > 10)
+        )
+            next.teamworkScore = 'Teamwork score must be 0-10';
+        if (
+            formData.performanceRating !== '' &&
+            (Number(formData.performanceRating) < 0 || Number(formData.performanceRating) > 10)
+        )
+            next.performanceRating = 'Performance rating must be 0-10';
+        if (formData.errorRate !== '' && (Number(formData.errorRate) < 0 || Number(formData.errorRate) > 100))
+            next.errorRate = 'Error rate must be 0-100';
+        if (
+            formData.pastProjectScore !== '' &&
+            (Number(formData.pastProjectScore) < 0 || Number(formData.pastProjectScore) > 100)
+        )
+            next.pastProjectScore = 'Score must be 0–100';
         if (availability.currentWorkload < 0 || availability.currentWorkload > 100) next.currentWorkload = 'Workload must be 0–100';
         setErrors(next);
         return Object.keys(next).length === 0;
@@ -142,12 +184,26 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
         try {
             const status = computeAvailabilityStatus(availability.currentProject, availability.currentWorkload);
 
+            const totalExp =
+                formData.totalExperienceYears === '' ? undefined : Number(formData.totalExperienceYears);
+
             const employeeData: EmployeeFormData = {
                 name: formData.name.trim(),
                 email: formData.email.trim(),
                 phone: formData.phone.trim() || undefined,
                 department: formData.department.trim(),
                 role: formData.role.trim(),
+                location: formData.location.trim() || undefined,
+                total_experience_years: totalExp,
+                experience: totalExp,
+                communication_score:
+                    formData.communicationScore === '' ? undefined : Number(formData.communicationScore),
+                teamwork_score:
+                    formData.teamworkScore === '' ? undefined : Number(formData.teamworkScore),
+                performance_rating:
+                    formData.performanceRating === '' ? undefined : Number(formData.performanceRating),
+                error_rate: formData.errorRate === '' ? undefined : Number(formData.errorRate),
+                availability_status: status,
                 skills: skills
                     .map((s) => ({ ...s, skillName: s.skillName.trim() }))
                     .filter((s) => s.skillName.length > 0)
@@ -159,8 +215,11 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                 availability: {
                     status,
                     currentWorkload: Number(availability.currentWorkload) || 0,
+                    currentProject: availability.currentProject?.trim() || undefined,
+                    availableFrom: availability.availableFrom || undefined,
                 },
-                pastProjectScore: formData.pastProjectScore ? Number(formData.pastProjectScore) : undefined,
+                pastProjectScore:
+                    formData.pastProjectScore === '' ? undefined : Number(formData.pastProjectScore),
             };
 
             const updated: Employee = {
@@ -170,7 +229,14 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                 phone: employeeData.phone,
                 department: employeeData.department,
                 role: employeeData.role,
-                experience: Number(formData.experience) || 0,
+                location: employeeData.location,
+                total_experience_years: employeeData.total_experience_years,
+                communication_score: employeeData.communication_score,
+                teamwork_score: employeeData.teamwork_score,
+                performance_rating: employeeData.performance_rating,
+                error_rate: employeeData.error_rate,
+                experience: employeeData.experience,
+                availability_status: employeeData.availability_status,
                 pastProjectScore: employeeData.pastProjectScore,
                 skills: skills
                     .map((s) => ({ ...s, skillName: s.skillName.trim() }))
@@ -184,8 +250,9 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                     })),
                 availability: {
                     status,
-                    currentProject: availability.currentProject?.trim() || undefined,
-                    currentWorkload: Number(availability.currentWorkload) || 0,
+                    currentProject: employeeData.availability.currentProject,
+                    currentWorkload: employeeData.availability.currentWorkload,
+                    availableFrom: employeeData.availability.availableFrom,
                 },
                 updatedAt: new Date().toISOString(),
             };
@@ -237,27 +304,102 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                             onChange={(e) => handleChange('phone', e.target.value)}
                         />
                         <Input
-                            label="Experience (Years)"
+                            label="Total Experience (Years)"
                             type="number"
                             min="0"
-                            value={formData.experience}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                handleChange('experience', val === '' ? 0 : parseFloat(val));
-                            }}
-                            error={errors.experience}
+                            placeholder="0"
+                            value={formData.totalExperienceYears}
+                            onChange={(e) =>
+                                handleChange(
+                                    'totalExperienceYears',
+                                    e.target.value === '' ? '' : e.target.value
+                                )
+                            }
+                            error={errors.totalExperienceYears}
                         />
                         <Input
                             label="Past Project Score (0-100)"
                             type="number"
                             min="0"
                             max="100"
+                            placeholder="0"
                             value={formData.pastProjectScore}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                handleChange('pastProjectScore', val === '' ? 0 : parseFloat(val));
-                            }}
+                            onChange={(e) =>
+                                handleChange(
+                                    'pastProjectScore',
+                                    e.target.value === '' ? '' : e.target.value
+                                )
+                            }
                             error={errors.pastProjectScore}
+                        />
+                        <Input
+                            label="Location"
+                            placeholder="City, Country"
+                            value={formData.location}
+                            onChange={(e) => handleChange('location', e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-lg font-semibold text-secondary-900 dark:text-white mb-4">Performance & Quality</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                            label="Communication Score (0-10)"
+                            type="number"
+                            min="0"
+                            max="10"
+                            placeholder="0"
+                            value={formData.communicationScore}
+                            onChange={(e) =>
+                                handleChange(
+                                    'communicationScore',
+                                    e.target.value === '' ? '' : e.target.value
+                                )
+                            }
+                            error={errors.communicationScore}
+                        />
+                        <Input
+                            label="Teamwork Score (0-10)"
+                            type="number"
+                            min="0"
+                            max="10"
+                            placeholder="0"
+                            value={formData.teamworkScore}
+                            onChange={(e) =>
+                                handleChange(
+                                    'teamworkScore',
+                                    e.target.value === '' ? '' : e.target.value
+                                )
+                            }
+                            error={errors.teamworkScore}
+                        />
+                        <Input
+                            label="Performance Rating (0-10)"
+                            type="number"
+                            min="0"
+                            max="10"
+                            placeholder="0"
+                            value={formData.performanceRating}
+                            onChange={(e) =>
+                                handleChange(
+                                    'performanceRating',
+                                    e.target.value === '' ? '' : e.target.value
+                                )
+                            }
+                            error={errors.performanceRating}
+                        />
+                        <Input
+                            label="Error Rate (%)"
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="0"
+                            value={formData.errorRate}
+                            onChange={(e) =>
+                                handleChange('errorRate', e.target.value === '' ? '' : e.target.value)
+                            }
+                            error={errors.errorRate}
                         />
                     </div>
                 </div>
@@ -309,6 +451,25 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                                 }))
                             }
                             error={errors.currentWorkload}
+                        />
+                        <Input
+                            label="Available From"
+                            type="date"
+                            value={availability.availableFrom || ''}
+                            onChange={(e) =>
+                                setAvailability((prev) => ({
+                                    ...prev,
+                                    availableFrom: e.target.value || undefined,
+                                }))
+                            }
+                        />
+                        <Input
+                            label="Computed Availability Status"
+                            value={computeAvailabilityStatus(
+                                availability.currentProject,
+                                availability.currentWorkload
+                            )}
+                            disabled
                         />
                     </div>
                 </div>

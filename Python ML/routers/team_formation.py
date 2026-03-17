@@ -93,18 +93,60 @@ def _build_response(
     """Build the unified response combining scoring + greedy results."""
     greedy_team = greedy_result["greedy_team"]
 
+    def _team_suitability_score() -> float:
+        if not greedy_team:
+            return 0.0
+
+        total_required = greedy_result.get("total_skills_required", 0) or 0
+        total_covered = greedy_result.get("total_skills_covered", 0) or 0
+        coverage_score = 100.0 if total_required == 0 else (total_covered / total_required) * 100.0
+
+        # Penalty for missing must-have skills
+        skill_coverage = greedy_result.get("skill_coverage", {})
+        must_have_missing = [k for k, v in skill_coverage.items() if not v.get("covered") and v.get("priority") == "Must-have"]
+        must_have_penalty = 1.0 - (0.15 * len(must_have_missing))  # 15% penalty per missing must-have
+        must_have_penalty = max(0.0, must_have_penalty)
+
+        # Reward for unique contributors (diversity)
+        contributors = set()
+        for v in skill_coverage.values():
+            for c in v.get("contributors", []):
+                contributors.add(c["name"])
+        diversity_score = (len(contributors) / len(greedy_team)) * 100.0 if greedy_team else 0.0
+
+        # Average candidate quality (lower weight)
+        avg_candidate_quality = sum(float(m.get("final_score", 0.0)) for m in greedy_team) / len(greedy_team)
+
+        # Weighted sum: coverage (55%), must-have penalty (applied after), diversity (25%), avg quality (20%)
+        raw_score = (coverage_score * 0.55) + (diversity_score * 0.25) + (avg_candidate_quality * 0.20)
+        penalized = raw_score * must_have_penalty
+        return round(max(0.0, min(100.0, penalized)), 1)
+
+    def _sanitize_candidate(candidate: dict) -> dict:
+        result = dict(candidate)
+        result.pop("final_score", None)
+        result.pop("match_percentage", None)
+        result.pop("score_breakdown", None)
+        return result
+
     # Mark greedy-selected candidates in the all_candidates list
     greedy_ids = {m["id"] for m in greedy_team}
     for c in scored:
         c["greedy_selected"] = c["id"] in greedy_ids
 
+    team_suitability_score = _team_suitability_score()
+
+    recommended_team_clean = [_sanitize_candidate(member) for member in greedy_team]
+    all_candidates_clean = [_sanitize_candidate(candidate) for candidate in scored]
+
     return {
         "team_size_requested":  team_size,
         "total_candidates":     len(scored),
+        "team_suitability_score": team_suitability_score,
         # Greedy team (final recommended team per flowchart)
-        "recommended_team":     greedy_team,
+        "recommended_team":     recommended_team_clean,
         # Full ranked list for "show all" toggle
-        "all_candidates":       scored,
+        "all_candidates":       all_candidates_clean,
         # Greedy metadata
         "skill_coverage":       greedy_result["skill_coverage"],
         "total_skills_covered": greedy_result["total_skills_covered"],
@@ -113,7 +155,7 @@ def _build_response(
         "fallback_used":        greedy_result["fallback_used"],
         "selection_log":        greedy_result["selection_log"],
         "skipped_candidates":   [
-            {"id": s["id"], "name": s["name"], "score": s["final_score"],
+            {"id": s["id"], "name": s["name"],
              "skip_reason": s.get("skip_reason", "")}
             for s in greedy_result["skipped_candidates"]
         ],

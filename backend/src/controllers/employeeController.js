@@ -8,10 +8,47 @@ const { ok, fail } = require('../utils/apiResponse');
  */
 async function getAll(req, res) {
   const { organizationId } = req.user;
+  const Allocation = require('../models/Allocation');
+  const Project = require('../models/Project');
 
+  // Fetch all employees
   const employees = await Employee.find({ organizationId }).sort({ createdAt: -1 });
 
-  return ok(res, employees, 'Employees fetched');
+  // For each employee, fetch their current allocation (if any)
+  const employeeData = await Promise.all(
+    employees.map(async (emp) => {
+      // Find active allocation (no end date or end date in future)
+      const allocation = await Allocation.findOne({
+        emp_id: emp._id,
+        $or: [
+          { allocation_end_date: null },
+          { allocation_end_date: { $gt: new Date() } },
+        ],
+      })
+        .sort({ allocation_start_date: -1 })
+        .populate('project_id', 'name');
+
+      let availability = {
+        status: emp.availability_status || 'Available',
+        currentProject: null,
+        currentWorkload: 0,
+        availableFrom: null,
+      };
+
+      if (allocation && allocation.project_id) {
+        availability.currentProject = allocation.project_id.name;
+        availability.status = 'Unavailable';
+      }
+
+      // Attach availability to employee object (frontend expects this)
+      return {
+        ...emp.toObject(),
+        availability,
+      };
+    })
+  );
+
+  return ok(res, employeeData, 'Employees fetched');
 }
 
 /**
@@ -47,6 +84,13 @@ async function create(req, res) {
     password,
     skills,
     availability,
+    total_experience_years,
+    communication_score,
+    teamwork_score,
+    performance_rating,
+    error_rate,
+    availability_status,
+    location,
     experience,
     pastProjectScore,
     photoUrl,
@@ -88,7 +132,24 @@ async function create(req, res) {
       currentWorkload: 0,
       availableFrom: null,
     },
-    experience: experience || 0,
+    availability_status: availability_status || availability?.status || 'Available',
+    total_experience_years:
+      total_experience_years !== undefined && total_experience_years !== null
+        ? Number(total_experience_years)
+        : experience !== undefined && experience !== null
+          ? Number(experience)
+          : 0,
+    communication_score: communication_score !== undefined && communication_score !== null ? Number(communication_score) : null,
+    teamwork_score: teamwork_score !== undefined && teamwork_score !== null ? Number(teamwork_score) : null,
+    performance_rating: performance_rating !== undefined && performance_rating !== null ? Number(performance_rating) : null,
+    error_rate: error_rate !== undefined && error_rate !== null ? Number(error_rate) : null,
+    location: location ? String(location).trim() : null,
+    experience:
+      experience !== undefined && experience !== null
+        ? Number(experience)
+        : total_experience_years !== undefined && total_experience_years !== null
+          ? Number(total_experience_years)
+          : 0,
     pastProjectScore: pastProjectScore || null,
     photoUrl: photoUrl || null,
   });

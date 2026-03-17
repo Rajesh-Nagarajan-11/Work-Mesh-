@@ -176,10 +176,7 @@ export interface TeamCandidate {
     seniority: 'junior' | 'mid' | 'senior';
     projects_count: number;
     avg_client_feedback: number | null;
-    final_score: number;
-    match_percentage: number;
     recommended: boolean;
-    team_seniority_balance: number;
     new_skills_contributed?: string[];
     optimal_allocation_pct?: number;
     current_project?: string;
@@ -189,12 +186,18 @@ export interface TeamCandidate {
         weak_skills: string[];
         gap_count: number;
     };
-    score_breakdown: TeamCandidateBreakdown;
+    final_score?: number;
+    match_percentage?: number;
+    score_breakdown?: TeamCandidateBreakdown;
 }
 
 export interface TeamRecommendation {
     team_size_requested: number;
     total_candidates: number;
+    team_suitability_score: number;
+    total_skills_covered: number;
+    total_skills_required: number;
+    uncovered_skills?: string[];
     recommended_team: TeamCandidate[];
     all_candidates: TeamCandidate[];
     algorithm: string;
@@ -286,16 +289,28 @@ export interface EmployeeFormData {
     phone?: string;
     department: string;
     role: string;
+    location?: string;
+    total_experience_years?: number;
+    experience?: number;
+    communication_score?: number;
+    teamwork_score?: number;
+    performance_rating?: number;
+    error_rate?: number;
+    availability_status?: 'Available' | 'Partially Available' | 'Unavailable';
     skills: Array<{
         skillId: string;
+        skillName?: string;
         yearsOfExperience: number;
         proficiencyLevel: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
     }>;
     availability: {
         status: 'Available' | 'Partially Available' | 'Unavailable';
         currentWorkload: number;
+        currentProject?: string;
+        availableFrom?: string;
     };
     pastProjectScore?: number;
+    photoUrl?: string;
 }
 
 export interface ProjectFormData {
