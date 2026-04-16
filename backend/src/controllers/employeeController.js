@@ -28,53 +28,75 @@ async function getAll(req, res) {
 
   // Fetch all employees
   const employees = await Employee.find({ organizationId }).sort({ createdAt: -1 });
+  const empIds = employees.map(e => e._id);
 
-  // For each employee, fetch their current allocation (if any)
-  const employeeData = await Promise.all(
-    employees.map(async (emp) => {
-      // Find active allocation (no end date or end date in future)
-      const allocation = await Allocation.findOne({
-        emp_id: emp._id,
-        $or: [
-          { allocation_end_date: null },
-          { allocation_end_date: { $gt: new Date() } },
-        ],
-      })
-        .sort({ allocation_start_date: -1 })
-        .populate('project_id', 'name');
-
-      let availability = {
-        status: emp.availability_status || 'Available',
-        currentProject: null,
-        currentWorkload: 0,
-        availableFrom: null,
-      };
-
-      if (allocation && allocation.project_id) {
-        availability.currentProject = allocation.project_id.name;
-        availability.status = 'Unavailable';
-      }
-
-      // Fetch skills
-      const employeeSkills = await EmployeeSkill.find({ emp_id: emp._id }).populate('skill_id', 'skill_name');
-      const mappedSkills = employeeSkills
-        .filter(es => es.skill_id) // ensure skill still exists
-        .map(es => ({
-          id: es._id.toHexString(),
-          skillId: es.skill_id._id.toHexString(),
-          skillName: es.skill_id.skill_name,
-          yearsOfExperience: es.years_experience,
-          proficiencyLevel: getProficiencyString(es.proficiency_level),
-        }));
-
-      // Attach availability to employee object (frontend expects this)
-      return {
-        ...emp.toJSON(),
-        availability,
-        skills: mappedSkills,
-      };
+  // Batch fetch all allocations and skills at once (not per-employee)
+  const [allocations, employeeSkillsMap] = await Promise.all([
+    Allocation.find({
+      emp_id: { $in: empIds },
+      $or: [
+        { allocation_end_date: null },
+        { allocation_end_date: { $gt: new Date() } },
+      ],
     })
-  );
+      .sort({ allocation_start_date: -1 })
+      .populate('project_id', 'name'),
+    EmployeeSkill.find({ emp_id: { $in: empIds } })
+      .populate('skill_id', 'skill_name'),
+  ]);
+
+  // Create lookup maps for fast access
+  const allocationByEmpId = {};
+  const skillsByEmpId = {};
+
+  allocations.forEach(alloc => {
+    if (!allocationByEmpId[alloc.emp_id]) {
+      allocationByEmpId[alloc.emp_id] = alloc;
+    }
+  });
+
+  employeeSkillsMap.forEach(es => {
+    if (!skillsByEmpId[es.emp_id]) {
+      skillsByEmpId[es.emp_id] = [];
+    }
+    skillsByEmpId[es.emp_id].push(es);
+  });
+
+  // Map employees with their data
+  const employeeData = employees.map(emp => {
+    const allocation = allocationByEmpId[emp._id];
+    
+    let availability = {
+      status: emp.availability_status || 'Available',
+      currentProject: null,
+      currentWorkload: 0,
+      availableFrom: null,
+    };
+
+    if (allocation && allocation.project_id) {
+      availability.currentProject = allocation.project_id.name;
+      availability.status = 'Unavailable';
+    }
+
+    // Map skills
+    const empSkills = skillsByEmpId[emp._id] || [];
+    const mappedSkills = empSkills
+      .filter(es => es.skill_id) // ensure skill still exists
+      .map(es => ({
+        id: es._id.toHexString(),
+        skillId: es.skill_id._id.toHexString(),
+        skillName: es.skill_id.skill_name,
+        yearsOfExperience: es.years_experience,
+        proficiencyLevel: getProficiencyString(es.proficiency_level),
+      }));
+
+    // Attach availability to employee object (frontend expects this)
+    return {
+      ...emp.toJSON(),
+      availability,
+      skills: mappedSkills,
+    };
+  });
 
   return ok(res, employeeData, 'Employees fetched');
 }
@@ -197,22 +219,30 @@ async function create(req, res) {
   if (skills && Array.isArray(skills)) {
     const skillDocs = [];
     for (const s of skills) {
-      if (!s.skillName) continue;
-      
-      let skillNameTrimmed = String(s.skillName).trim();
-      let dbSkill = await Skill.findOne({
-        organizationId,
-        skill_name: { $regex: new RegExp(`^${skillNameTrimmed}$`, 'i') }
-      });
-      
-      if (!dbSkill) {
-        dbSkill = await Skill.create({
-          organizationId,
-          skill_name: skillNameTrimmed,
-          skill_category: 'General'
-        });
+      let dbSkill = null;
+
+      if (s.skillId) {
+        dbSkill = await Skill.findOne({ _id: s.skillId, organizationId });
       }
-      
+
+      if (!dbSkill && s.skillName) {
+        const skillNameTrimmed = String(s.skillName).trim();
+        dbSkill = await Skill.findOne({
+          organizationId,
+          skill_name: { $regex: new RegExp(`^${skillNameTrimmed}$`, 'i') },
+        });
+
+        if (!dbSkill) {
+          dbSkill = await Skill.create({
+            organizationId,
+            skill_name: skillNameTrimmed,
+            skill_category: 'General',
+          });
+        }
+      }
+
+      if (!dbSkill) continue;
+
       skillDocs.push({
         emp_id: employee._id,
         skill_id: dbSkill._id,
@@ -285,26 +315,34 @@ async function update(req, res) {
   const Skill = require('../models/Skill');
   if (updates.skills && Array.isArray(updates.skills)) {
     await EmployeeSkill.deleteMany({ emp_id: employee._id });
-    
+
     // Process skills sequentially to ensure we get/create correct skill records
     const skillDocs = [];
     for (const s of updates.skills) {
-      if (!s.skillName) continue; // Safety check
-      
-      let skillNameTrimmed = String(s.skillName).trim();
-      let dbSkill = await Skill.findOne({
-        organizationId: employee.organizationId,
-        skill_name: { $regex: new RegExp(`^${skillNameTrimmed}$`, 'i') }
-      });
-      
-      if (!dbSkill) {
-        dbSkill = await Skill.create({
-          organizationId: employee.organizationId,
-          skill_name: skillNameTrimmed,
-          skill_category: 'General'
-        });
+      let dbSkill = null;
+
+      if (s.skillId) {
+        dbSkill = await Skill.findOne({ _id: s.skillId, organizationId: employee.organizationId });
       }
-      
+
+      if (!dbSkill && s.skillName) {
+        const skillNameTrimmed = String(s.skillName).trim();
+        dbSkill = await Skill.findOne({
+          organizationId: employee.organizationId,
+          skill_name: { $regex: new RegExp(`^${skillNameTrimmed}$`, 'i') },
+        });
+
+        if (!dbSkill) {
+          dbSkill = await Skill.create({
+            organizationId: employee.organizationId,
+            skill_name: skillNameTrimmed,
+            skill_category: 'General',
+          });
+        }
+      }
+
+      if (!dbSkill) continue;
+
       skillDocs.push({
         emp_id: employee._id,
         skill_id: dbSkill._id,
@@ -323,7 +361,18 @@ async function update(req, res) {
   Object.assign(employee, updates);
   await employee.save();
 
-  return ok(res, employee, 'Employee updated');
+  const employeeSkills = await EmployeeSkill.find({ emp_id: employee._id }).populate('skill_id', 'skill_name');
+  const mappedSkills = employeeSkills
+    .filter(es => es.skill_id)
+    .map(es => ({
+      id: es._id.toHexString(),
+      skillId: es.skill_id._id.toHexString(),
+      skillName: es.skill_id.skill_name,
+      yearsOfExperience: es.years_experience,
+      proficiencyLevel: getProficiencyString(es.proficiency_level),
+    }));
+
+  return ok(res, { ...employee.toJSON(), skills: mappedSkills }, 'Employee updated');
 }
 
 /**

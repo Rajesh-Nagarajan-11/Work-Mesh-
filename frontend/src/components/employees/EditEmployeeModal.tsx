@@ -281,7 +281,6 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
             };
 
             onSave(updated);
-            addToast('success', 'Employee updated');
             onClose();
         } finally {
             setIsSubmitting(false);
